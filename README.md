@@ -1,6 +1,18 @@
 # SmartBuket Analytics
 
-Plataforma centralizada de analítica **event-driven**, **schema-light**, con soporte **geoespacial** nativo y privacidad por diseño.
+Plataforma centralizada de analítica **event-driven**, **schema-light**, con soporte **geoespacial** nativo y **privacidad por diseño**.
+
+## TL;DR
+
+- Local (Windows): `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-all.ps1`
+- Docs (operación): [docs/runbooks/README.md](docs/runbooks/README.md)
+- Deploy en Google Cloud (Cloud Run + Terraform + Cloud Build): [infra/gcp/terraform/README.md](infra/gcp/terraform/README.md)
+
+## Stack
+
+- Python (FastAPI) + librería común en `libs/sb_common`
+- Postgres + PostGIS (agregados + features) y RabbitMQ (bus)
+- IaC: Terraform (GCP) + Cloud Build (CI/CD + bootstrap)
 
 ## Componentes (starter)
 - `services/ingest-api`: recibe eventos HTTP, guarda crudo y registra outbox (no publica directo)
