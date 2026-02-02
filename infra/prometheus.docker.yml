@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  # Docker/VM-friendly: scrape by compose DNS names (no host.docker.internal).
+  # Requires the APIs to be running as containers on the same compose network.
+
+  - job_name: "sb-ingest-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - ingest-api:8000
+
+  - job_name: "sb-query-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - query-api:8000
+
+  - job_name: "sb-reco-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - reco-api:8000

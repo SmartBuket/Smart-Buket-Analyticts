@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  # The APIs run on the host (started by scripts/run-all.ps1).
+  # On Docker Desktop (Windows/Mac), host.docker.internal resolves to the host.
+  # Note: `query-api` (8002) is often not running during local dev, so it's
+  # disabled by default to avoid a noisy "unknown/down" target.
+
+  - job_name: "sb-ingest-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - host.docker.internal:8001
+
+  - job_name: "sb-query-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - host.docker.internal:8002
+
+  - job_name: "sb-reco-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - host.docker.internal:8003

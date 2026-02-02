@@ -1,0 +1,31 @@
+# Copy to terraform.tfvars and fill values
+
+project_id = "YOUR_PROJECT_ID"
+region     = "us-central1"
+
+artifact_repo = "sb-analytics"
+
+images = {
+  # If you use Cloud Build, it will push images tagged with $SHORT_SHA.
+  ingest_api       = "us-central1-docker.pkg.dev/YOUR_PROJECT_ID/sb-analytics/ingest-api:bootstrap"
+  query_api        = "us-central1-docker.pkg.dev/YOUR_PROJECT_ID/sb-analytics/query-api:bootstrap"
+  reco_api         = "us-central1-docker.pkg.dev/YOUR_PROJECT_ID/sb-analytics/reco-api:bootstrap"
+  processor        = "us-central1-docker.pkg.dev/YOUR_PROJECT_ID/sb-analytics/processor:bootstrap"
+  outbox_publisher = "us-central1-docker.pkg.dev/YOUR_PROJECT_ID/sb-analytics/outbox-publisher:bootstrap"
+}
+
+# DEV ONLY: move to Secret Manager for staging/prod
+env = {
+  # Other non-secret settings can go here.
+}
+
+# When true, Terraform provisions Cloud SQL and injects SB_POSTGRES_DSN from Secret Manager.
+enable_cloudsql = true
+
+# RabbitMQ URL comes from Secret Manager (create the secret once, out-of-band).
+enable_rabbitmq_secret = true
+manage_rabbitmq_secret = false
+rabbitmq_secret_id     = "sb-rabbitmq-url"
+
+# Prefer false + API Gateway/IAP/JWT for real deployments
+allow_unauthenticated = true

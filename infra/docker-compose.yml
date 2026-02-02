@@ -1,0 +1,135 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: sb-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: sb-postgres
+    environment:
+      POSTGRES_USER: sb
+      POSTGRES_PASSWORD: sb
+      POSTGRES_DB: sb_analytics
+    ports:
+      - "15432:5432"
+    volumes:
+      - sb_pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sb-pgadmin
+    depends_on:
+      - postgres
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@smartbuket.com"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+    ports:
+      - "5050:80"
+    volumes:
+      - sb_pgadmin:/var/lib/pgadmin
+
+  metabase:
+    image: metabase/metabase:v0.58.1
+    container_name: sb-metabase
+    depends_on:
+      - postgres
+    environment:
+      # Use Postgres as Metabase Application DB (prod-like, durable)
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: sb_metabase
+      MB_DB_HOST: postgres
+      MB_DB_PORT: 5432
+      MB_DB_USER: sb_metabase
+      MB_DB_PASS: sb_metabase
+    ports:
+      - "3001:3000"
+      - "3011:3000"
+    volumes:
+      - sb_metabase:/metabase-data
+
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    container_name: sb-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      # Compose-time selection (set PROM_CONFIG in your shell before running docker compose):
+      # - prometheus.yml:         scrape host ports via host.docker.internal (Windows/Mac dev)
+      # - prometheus.docker.yml:  scrape compose DNS names (VM-friendly)
+      - "--config.file=/etc/prometheus/${PROM_CONFIG:-prometheus.yml}"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus.docker.yml:/etc/prometheus/prometheus.docker.yml:ro
+
+  grafana:
+    image: grafana/grafana-oss:10.4.2
+    container_name: sb-grafana
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3002:3000"
+    volumes:
+      - sb_grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  query-api:
+    profiles: ["beta"]
+    build:
+      context: ..
+      dockerfile: services/query-api/Dockerfile
+    container_name: sb-query-api
+    depends_on:
+      - postgres
+    environment:
+      SB_POSTGRES_DSN: postgresql+psycopg://sb:sb@postgres:5432/sb_analytics
+      PYTHONUNBUFFERED: "1"
+      SB_METRICS_ENABLED: "1"
+    ports:
+      - "8002:8000"
+
+  ingest-api:
+    profiles: ["beta"]
+    build:
+      context: ..
+      dockerfile: services/ingest-api/Dockerfile
+    container_name: sb-ingest-api
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      SB_POSTGRES_DSN: postgresql+psycopg://sb:sb@postgres:5432/sb_analytics
+      SB_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      PYTHONUNBUFFERED: "1"
+      SB_METRICS_ENABLED: "1"
+    ports:
+      - "8001:8000"
+
+  reco-api:
+    profiles: ["beta"]
+    build:
+      context: ..
+      dockerfile: services/reco-api/Dockerfile
+    container_name: sb-reco-api
+    depends_on:
+      - postgres
+    environment:
+      SB_POSTGRES_DSN: postgresql+psycopg://sb:sb@postgres:5432/sb_analytics
+      PYTHONUNBUFFERED: "1"
+      SB_METRICS_ENABLED: "1"
+    ports:
+      - "8003:8000"
+
+volumes:
+  sb_pgdata:
+  sb_pgadmin:
+  sb_metabase:
+  sb_grafana:

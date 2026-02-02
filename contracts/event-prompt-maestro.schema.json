@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmartBuket Analytics Event Envelope (Prompt Maestro)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "event_name",
+    "occurred_at",
+    "event_id",
+    "trace_id",
+    "producer",
+    "actor",
+
+    "app_uuid",
+    "anon_user_id",
+    "device_id_hash",
+    "session_id",
+    "sdk_version",
+    "event_version",
+    "payload",
+    "context"
+  ],
+  "properties": {
+    "event_name": { "type": "string", "minLength": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "event_id": { "type": "string", "format": "uuid" },
+    "trace_id": { "type": "string", "format": "uuid" },
+    "producer": { "type": "string", "minLength": 1 },
+    "actor": { "type": "string", "minLength": 1 },
+
+    "app_uuid": { "type": "string", "format": "uuid" },
+
+    "anon_user_id": { "type": "string", "minLength": 16 },
+    "device_id_hash": { "type": "string", "minLength": 16 },
+    "session_id": { "type": "string", "minLength": 16 },
+
+    "sdk_version": { "type": "string", "minLength": 1 },
+    "event_version": { "type": "string", "minLength": 1 },
+
+    "payload": { "type": "object", "additionalProperties": true },
+    "context": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["geo"],
+      "properties": {
+        "device": { "type": "object", "additionalProperties": true },
+        "os": { "type": "object", "additionalProperties": true },
+        "geo": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["lat", "lon", "accuracy_m", "source"],
+          "properties": {
+            "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+            "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+            "accuracy_m": { "type": "number", "minimum": 0 },
+            "source": { "type": "string", "enum": ["gps", "network", "ip"] }
+          }
+        }
+      }
+    },
+
+    "event_type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Legacy alias; when SB_STRICT_ENVELOPE=1, the system derives event_type from event_name."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Legacy alias; when SB_STRICT_ENVELOPE=1, the system derives timestamp from occurred_at."
+    }
+  }
+}

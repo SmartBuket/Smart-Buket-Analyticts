@@ -1,0 +1,23 @@
+{
+  "app_uuid": "b2a1d7d8-7f3f-4b35-8cbb-9a3a9b37d7b7",
+  "event_type": "geo.ping",
+  "timestamp": "2025-12-28T18:22:11Z",
+  "anon_user_id": "u_4f1c9b2d9a9c1f0d0a0b3c...",
+  "device_id_hash": "d_aa93c0f1b1d6c2...",
+  "session_id": "s_2c9aa1c0d3...",
+  "sdk_version": "1.3.0",
+  "event_version": "1",
+  "payload": {
+    "reason": "app_open|timer_10m|zone_change"
+  },
+  "context": {
+    "device": {"model": "Pixel 8"},
+    "os": {"name": "android", "version": "15"},
+    "geo": {
+      "lat": 18.4861,
+      "lon": -69.9312,
+      "accuracy_m": 25,
+      "source": "gps"
+    }
+  }
+}

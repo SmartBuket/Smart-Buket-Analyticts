@@ -1,0 +1,58 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "place_id": "demo_sd_poly",
+        "name": "Demo Place (Santo Domingo)",
+        "place_type": "mall"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-69.9322, 18.4855],
+            [-69.9302, 18.4855],
+            [-69.9302, 18.4867],
+            [-69.9322, 18.4867],
+            [-69.9322, 18.4855]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_id": "demo_else_poly",
+        "name": "Demo Place (Elsewhere)",
+        "place_type": "stadium"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-69.9500, 18.4700],
+            [-69.9480, 18.4700],
+            [-69.9480, 18.4715],
+            [-69.9500, 18.4715],
+            [-69.9500, 18.4700]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_id": "demo_circle",
+        "name": "Demo Place (Circle)",
+        "place_type": "event",
+        "radius_m": 250
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-69.9000, 18.5000]
+      }
+    }
+  ]
+}

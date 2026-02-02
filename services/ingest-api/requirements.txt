@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+orjson
+pika
+-e ../../libs/sb_common

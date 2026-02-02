@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmartBuket Analytics Event Core (Schema-Light)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "app_uuid",
+    "event_type",
+    "timestamp",
+    "anon_user_id",
+    "device_id_hash",
+    "session_id",
+    "sdk_version",
+    "event_version",
+    "payload",
+    "context"
+  ],
+  "properties": {
+    "app_uuid": { "type": "string", "format": "uuid" },
+    "event_type": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+
+    "anon_user_id": { "type": "string", "minLength": 16 },
+    "device_id_hash": { "type": "string", "minLength": 16 },
+    "session_id": { "type": "string", "minLength": 16 },
+
+    "sdk_version": { "type": "string", "minLength": 1 },
+    "event_version": { "type": "string", "minLength": 1 },
+
+    "payload": { "type": "object", "additionalProperties": true },
+    "context": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["geo"],
+      "properties": {
+        "device": { "type": "object", "additionalProperties": true },
+        "os": { "type": "object", "additionalProperties": true },
+        "geo": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["lat", "lon", "accuracy_m", "source"],
+          "properties": {
+            "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+            "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+            "accuracy_m": { "type": "number", "minimum": 0 },
+            "source": { "type": "string", "enum": ["gps", "network", "ip"] }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,119 @@
+# Cloud Build pipeline: build + push + deploy to Cloud Run
+# Trigger with:
+#   gcloud builds submit --config infra/gcp/cloudbuild/cloudbuild.yaml .
+
+substitutions:
+  _REGION: us-central1
+  _REPO: sb-analytics
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+serviceAccount: "projects/$PROJECT_ID/serviceAccounts/sb-cloudbuild-deploy@$PROJECT_ID.iam.gserviceaccount.com"
+
+steps:
+  # Persist docker auth in /workspace so it is shared across steps.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    env:
+      - HOME=/workspace
+    args:
+      - -ceu
+      - |
+        gcloud auth configure-docker "${_REGION}-docker.pkg.dev" --quiet
+
+  # Build + push images
+  - name: gcr.io/cloud-builders/docker
+    env: ["HOME=/workspace"]
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/ingest-api:$SHORT_SHA"
+      - services/ingest-api
+  - name: gcr.io/cloud-builders/docker
+    env: ["HOME=/workspace"]
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/ingest-api:$SHORT_SHA"]
+
+  - name: gcr.io/cloud-builders/docker
+    env: ["HOME=/workspace"]
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/query-api:$SHORT_SHA"
+      - services/query-api
+  - name: gcr.io/cloud-builders/docker
+    env: ["HOME=/workspace"]
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/query-api:$SHORT_SHA"]
+
+  - name: gcr.io/cloud-builders/docker
+    env: ["HOME=/workspace"]
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/reco-api:$SHORT_SHA"
+      - services/reco-api
+  - name: gcr.io/cloud-builders/docker
+    env: ["HOME=/workspace"]
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/reco-api:$SHORT_SHA"]
+
+  - name: gcr.io/cloud-builders/docker
+    env: ["HOME=/workspace"]
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/processor:$SHORT_SHA"
+      - services/processor
+  - name: gcr.io/cloud-builders/docker
+    env: ["HOME=/workspace"]
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/processor:$SHORT_SHA"]
+
+  - name: gcr.io/cloud-builders/docker
+    env: ["HOME=/workspace"]
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/outbox-publisher:$SHORT_SHA"
+      - services/outbox-publisher
+  - name: gcr.io/cloud-builders/docker
+    env: ["HOME=/workspace"]
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/outbox-publisher:$SHORT_SHA"]
+
+  # Deploy (updates existing services created by Terraform)
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        RUN_SA="sb-analytics-run@$PROJECT_ID.iam.gserviceaccount.com"
+
+        gcloud run deploy ingest-api \
+          --region "${_REGION}" --platform managed --quiet \
+          --service-account "$RUN_SA" \
+          --image "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/ingest-api:$SHORT_SHA"
+
+        gcloud run deploy query-api \
+          --region "${_REGION}" --platform managed --quiet \
+          --service-account "$RUN_SA" \
+          --image "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/query-api:$SHORT_SHA"
+
+        gcloud run deploy reco-api \
+          --region "${_REGION}" --platform managed --quiet \
+          --service-account "$RUN_SA" \
+          --image "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/reco-api:$SHORT_SHA"
+
+        gcloud run deploy processor \
+          --region "${_REGION}" --platform managed --quiet \
+          --service-account "$RUN_SA" \
+          --image "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/processor:$SHORT_SHA"
+
+        gcloud run deploy outbox-publisher \
+          --region "${_REGION}" --platform managed --quiet \
+          --service-account "$RUN_SA" \
+          --image "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/outbox-publisher:$SHORT_SHA"
+
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/ingest-api:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/query-api:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/reco-api:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/processor:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/outbox-publisher:$SHORT_SHA"

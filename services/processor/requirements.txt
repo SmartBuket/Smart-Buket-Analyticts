@@ -1,0 +1,7 @@
+sqlalchemy
+psycopg[binary]
+orjson
+h3
+shapely
+pika
+-e ../../libs/sb_common

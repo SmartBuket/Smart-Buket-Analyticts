@@ -1,0 +1,165 @@
+# Fully automatic bootstrap:
+# - creates/ensures Terraform state bucket
+# - terraform apply (infra only: AR, SA, Cloud SQL, Secret Manager)
+# - initializes DB schema (PostGIS + tables) via Cloud SQL Proxy + psql
+# - builds & pushes images
+# - terraform apply again (creates Cloud Run services with new images)
+#
+# Run:
+#   gcloud builds submit --config infra/gcp/cloudbuild/cloudbuild-bootstrap.yaml \
+#     --substitutions _REGION=us-central1,_REPO=sb-analytics,_TF_STATE_BUCKET=YOUR_BUCKET,_RABBITMQ_URL=amqps://... .
+
+substitutions:
+  _REGION: us-central1
+  _REPO: sb-analytics
+  _TF_STATE_BUCKET: ""
+  _TF_STATE_PREFIX: smartbuket-analytics
+  _CLOUDSQL_INSTANCE: sb-analytics-pg
+  _DB_NAME: sb_analytics
+  _RABBITMQ_SECRET_ID: sb-rabbitmq-url
+  _ALLOW_UNAUTH: "true"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+serviceAccount: "projects/$PROJECT_ID/serviceAccounts/sb-cloudbuild-bootstrap@$PROJECT_ID.iam.gserviceaccount.com"
+
+steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ -z "${_TF_STATE_BUCKET}" ]]; then
+          echo "ERROR: _TF_STATE_BUCKET is required (a globally-unique GCS bucket name)." >&2
+          exit 1
+        fi
+
+        # Create state bucket if missing
+        if ! gcloud storage buckets describe "gs://${_TF_STATE_BUCKET}" >/dev/null 2>&1; then
+          gcloud storage buckets create "gs://${_TF_STATE_BUCKET}" \
+            --location "${_REGION}" \
+            --uniform-bucket-level-access
+        fi
+
+        # Validate RabbitMQ secret exists (value is never printed)
+        if ! gcloud secrets describe "${_RABBITMQ_SECRET_ID}" >/dev/null 2>&1; then
+          echo "ERROR: Secret Manager secret '${_RABBITMQ_SECRET_ID}' not found. Create it before running bootstrap." >&2
+          exit 1
+        fi
+
+  # Terraform apply (infra only)
+  - name: hashicorp/terraform:1.14.4
+    entrypoint: sh
+    dir: infra/gcp/terraform
+    args:
+      - -ceu
+      - |
+        terraform init -upgrade \
+          -backend-config="bucket=${_TF_STATE_BUCKET}" \
+          -backend-config="prefix=${_TF_STATE_PREFIX}"
+
+        terraform apply -auto-approve \
+          -var "project_id=$PROJECT_ID" \
+          -var "region=${_REGION}" \
+          -var "artifact_repo=${_REPO}" \
+          -var "enable_cloudrun_services=false" \
+          -var "allow_unauthenticated=${_ALLOW_UNAUTH}" \
+          -var "enable_rabbitmq_secret=true" \
+          -var "manage_rabbitmq_secret=false" \
+          -var "rabbitmq_secret_id=${_RABBITMQ_SECRET_ID}"
+
+  # Initialize DB schema (PostGIS + tables) using Cloud SQL Proxy
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        apt-get update -y
+        apt-get install -y --no-install-recommends postgresql-client ca-certificates curl
+
+        CONN_NAME="$PROJECT_ID:${_REGION}:${_CLOUDSQL_INSTANCE}"
+
+        # Fetch postgres admin password created by Terraform
+        POSTGRES_PASSWORD="$(gcloud secrets versions access latest --secret sb-postgres-admin-password)"
+
+        curl -fsSL -o /workspace/cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.1/cloud-sql-proxy.linux.amd64
+        chmod +x /workspace/cloud-sql-proxy
+
+        mkdir -p /workspace/cloudsql
+        /workspace/cloud-sql-proxy --unix-socket /workspace/cloudsql "$CONN_NAME" &
+        PROXY_PID=$!
+
+        # Wait for socket directory
+        for i in $(seq 1 60); do
+          if [[ -S "/workspace/cloudsql/$CONN_NAME/.s.PGSQL.5432" ]]; then
+            break
+          fi
+          sleep 1
+        done
+
+        export PGPASSWORD="$POSTGRES_PASSWORD"
+        psql -h "/workspace/cloudsql/$CONN_NAME" -U postgres -d "${_DB_NAME}" -f infra/init.sql
+
+        kill "$PROXY_PID" || true
+
+  # Build + push images
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/ingest-api:$SHORT_SHA", "services/ingest-api"]
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/ingest-api:$SHORT_SHA"]
+
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/query-api:$SHORT_SHA", "services/query-api"]
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/query-api:$SHORT_SHA"]
+
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/reco-api:$SHORT_SHA", "services/reco-api"]
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/reco-api:$SHORT_SHA"]
+
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/processor:$SHORT_SHA", "services/processor"]
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/processor:$SHORT_SHA"]
+
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/outbox-publisher:$SHORT_SHA", "services/outbox-publisher"]
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/outbox-publisher:$SHORT_SHA"]
+
+  # Terraform apply (Cloud Run services) with the new image tags
+  - name: hashicorp/terraform:1.14.4
+    entrypoint: sh
+    dir: infra/gcp/terraform
+    args:
+      - -ceu
+      - |
+        terraform init -upgrade \
+          -backend-config="bucket=${_TF_STATE_BUCKET}" \
+          -backend-config="prefix=${_TF_STATE_PREFIX}"
+
+        terraform apply -auto-approve \
+          -var "project_id=$PROJECT_ID" \
+          -var "region=${_REGION}" \
+          -var "artifact_repo=${_REPO}" \
+          -var "enable_cloudrun_services=true" \
+          -var "allow_unauthenticated=${_ALLOW_UNAUTH}" \
+          -var "enable_rabbitmq_secret=true" \
+          -var "manage_rabbitmq_secret=false" \
+          -var "rabbitmq_secret_id=${_RABBITMQ_SECRET_ID}" \
+          -var "images={\
+            ingest_api=\"${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/ingest-api:$SHORT_SHA\",\
+            query_api=\"${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/query-api:$SHORT_SHA\",\
+            reco_api=\"${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/reco-api:$SHORT_SHA\",\
+            processor=\"${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/processor:$SHORT_SHA\",\
+            outbox_publisher=\"${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/outbox-publisher:$SHORT_SHA\"\
+          }"
+
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/ingest-api:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/query-api:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/reco-api:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/processor:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/outbox-publisher:$SHORT_SHA"

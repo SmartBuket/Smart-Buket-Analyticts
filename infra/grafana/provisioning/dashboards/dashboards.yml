@@ -1,0 +1,11 @@
+apiVersion: 1
+
+dashboards:
+  - name: smartbuket
+    orgId: 1
+    folder: SmartBuket
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

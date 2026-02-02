@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmartBuket Analytics Event Envelope (Prompt Maestro / PETS)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "event_id",
+    "event_name",
+    "event_version",
+    "occurred_at",
+    "trace_id",
+    "app_uuid",
+    "producer",
+    "actor",
+    "payload",
+    "context"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_name": { "type": "string", "minLength": 1 },
+    "event_version": { "type": "string", "minLength": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "trace_id": { "type": "string", "format": "uuid" },
+    "app_uuid": { "type": "string", "format": "uuid" },
+    "producer": { "type": "string", "minLength": 1 },
+    "actor": { "type": "string", "minLength": 1 },
+    "payload": { "type": "object", "additionalProperties": true },
+    "context": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["geo"],
+      "properties": {
+        "device": { "type": "object", "additionalProperties": true },
+        "os": { "type": "object", "additionalProperties": true },
+        "geo": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["lat", "lon", "accuracy_m", "source"],
+          "properties": {
+            "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+            "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+            "accuracy_m": { "type": "number", "minimum": 0 },
+            "source": { "type": "string", "enum": ["gps", "network", "ip"] }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sb-common"
+version = "0.1.0"
+description = "Shared utilities for SmartBuket Analytics services"
+requires-python = ">=3.11"
+dependencies = [
+  "sqlalchemy",
+  "PyJWT[crypto]",
+  "prometheus-client",
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sb_common*"]
